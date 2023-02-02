@@ -13,7 +13,7 @@ import seaborn as sns
 #%%
 # read data
 
-historical_data = pd.read_csv(r"C:\Users\Christopher\Documents\DataProjects2022\DoorDash\historical_data.csv")
+historical_data = pd.read_csv(r"C:\Users\Christopher\Documents\DataProjects2022\DoorDashDeliveryPrediction\historical_data.csv")
 historical_data.head()
 
 #%%
@@ -101,3 +101,75 @@ train_df.replace([np.inf, -np.inf], np.nan, inplace=True)
 train_df.dropna(inplace=True)
 
 train_df.shape
+
+#%%
+# Investigating for Co-linearity
+# Creating a masked coorelation matrix
+
+# creating the mask
+coor = train_df.corr()
+mask = np.triu(np.ones_like(coor,dtype=bool))
+
+# set up matplotlib figure
+f, ax = plt.subplots(figsize=(11,9))
+# generate custom diverging colormap
+cmap = sns.diverging_palette(230, 20, as_cmap=True)
+# draw the heatmap with the mask and correct aspect ratio
+sns.heatmap(coor, mask=mask, cmap=cmap, vmax=.3, center=0,
+            square=True, linewidths=.5, cbar_kws={"shrink": .5})
+
+#%%
+#category_indonesian has a pearson coefficient of 0
+# after investigating this column is acutally all zeros, so we will drop this column
+train_df['category_indonesian'].describe()
+
+#%%
+# Functions to get redundant values and find top correlated features
+
+def get_redundant_pairs(df):
+    'get diagonal and lower triangular pairs of the correlation matrix'
+    pairs_to_drop = set()
+    cols = df.columns
+    for i in range(0, df.shape[1]):
+        for j in range(0, i+1):
+            pairs_to_drop.add((cols[i],cols[j]))
+    return pairs_to_drop
+
+def get_top_abs_coorelations(df, n=5):
+    'sort coorelations in the descending order and return n highest results'
+    au_corr = df.corr().abs().unstack()
+    labels_to_drop = get_redundant_pairs(df)
+    au_corr = au_corr.drop(labels=labels_to_drop).sort_values(ascending=False)
+    return au_corr[0:n]
+
+#%%
+
+print("Top Absolute Correlations")
+print(get_top_abs_coorelations(train_df, 20))
+
+#%%
+# We will drop: created_at, market_id, store_id, store_primary_category,
+# actual_delivery_time, order_protocol
+
+train_df = historical_data.drop(columns = ["created_at", "market_id", "store_id",
+                                           "store_primary_category", "actual_delivery_time", "order_protocol"])
+
+#%%
+# dont concat markeyt id from our one-hot encoding
+
+train_df = pd.concat([train_df, order_protocol_dummies, store_primary_category_dummies], axis=1)
+
+# drop highly coorelated features
+train_df = train_df.drop(columns = ["total_onshift_dashers", "total_busy_dashers",
+                                    "category_indonesian",
+                                    "estimated_non_prep_duration",
+                                    "nan_store_primary_category"])
+
+#%%
+# align dtyoe iver dataset
+train_df = train_df.apply(np.float32)
+# replace inf values with nan to drap all nans
+train_df.replace([np.inf, -np.inf], np.nan, inplace=True)
+train_df.dropna(inplace=True)
+
+train_df.head()
